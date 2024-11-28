@@ -23,13 +23,17 @@ def process_file(file_path: str, type: dtype) -> torch.Tensor:
     return torch.tensor(flat_data, dtype=type)
 
 
-def construct_data(path: str, type: dtype) -> list[torch.Tensor]:
-    """Optimized function to load all data as torch.Tensors."""
+def construct_data(path: str, type: torch.dtype, count: int = -1) -> list[torch.Tensor]:
+    """Optimized function to load a specified amount of data as torch.Tensors."""
     tensor_data = []
     print(f"Loading tensor data from {path}")
 
     # Get list of files
     file_paths = [os.path.join(path, file) for file in os.listdir(path)]
+
+    # If count is not -1 and less than the total files, slice the list
+    if count != -1:
+        file_paths = file_paths[:count]
 
     # Using ThreadPoolExecutor for parallel file processing
     with ThreadPoolExecutor() as executor:
@@ -57,7 +61,7 @@ def train_model_1(model, train_loader, num_epochs=50, device: str | torch.device
             input = inputs[0].to(device)  # Move inputs to device
             outputs = model(input)
             loss = weighted_binary_cross_entropy(
-                outputs, input, weights=[0.33, 0.67]
+                outputs, input, weights=[0.25, 0.75]
             )  # sparse voxel [0.28, 0.72]
             loss.backward()
             optimizer.step()
@@ -77,14 +81,15 @@ def train_model_1(model, train_loader, num_epochs=50, device: str | torch.device
 def main():
     input_dim = 8800  # voxel grid dimension
     latent_dim = 16
-    num_epoch = 300
+    num_epoch = 50
+    load_dataset_num = -1  # number of datasets (-1 for all)
 
     # Determine if a GPU is available and set the device accordingly
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = VoxelAutoencoder_1Layers(input_dim, latent_dim)
 
-    tensor_datas = construct_data(DATA_RAW_PATH, torch.float32)
+    tensor_datas = construct_data(DATA_RAW_PATH, torch.float32, load_dataset_num)
     print(f"Loaded {len(tensor_datas)} data files")
     tensor_dataset = TensorDataset(torch.stack(tensor_datas))
     train_loader = DataLoader(tensor_dataset, batch_size=32, shuffle=True)

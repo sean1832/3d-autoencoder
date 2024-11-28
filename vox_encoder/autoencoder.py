@@ -1,9 +1,9 @@
 from torch import nn
 
 
-class VoxelAutoencoder_2Layers(nn.Module):
+class VoxelAutoencoder_linear2(nn.Module):
     def __init__(self, input_dim, latent_dim):
-        super(VoxelAutoencoder_2Layers, self).__init__()
+        super(VoxelAutoencoder_linear2, self).__init__()
         self.encoder = nn.Sequential(
             # input layer
             nn.Linear(input_dim, 4096),
@@ -54,9 +54,9 @@ class VoxelAutoencoder_2Layers(nn.Module):
         return self.encoder(x)
 
 
-class VoxelAutoencoder_1Layers(nn.Module):
+class VoxelAutoencoder_linear1(nn.Module):
     def __init__(self, input_dim, latent_dim):
-        super(VoxelAutoencoder_1Layers, self).__init__()
+        super(VoxelAutoencoder_linear1, self).__init__()
         self.encoder = nn.Sequential(
             # input layer
             nn.Linear(input_dim, 1024),
@@ -96,6 +96,11 @@ class VoxelAutoencoder_1Layers(nn.Module):
     def encode(self, x):
         """Get latent representation"""
         return self.encoder(x)
+
+
+class VoxelAutoencoder_CNN(nn.Module):
+    def __init__(self) -> None:
+        super(VoxelAutoencoder_CNN, self).__init__()
 
 
 # TODO: implement Convolutional Autoencoder

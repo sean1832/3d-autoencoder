@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from vox_encoder import DATA_RAW_PATH, OUTPUT_DIR
-from vox_encoder.autoencoder import VoxelAutoencoder_1Layers, VoxelAutoencoder_2Layers
+from vox_encoder.autoencoder import VoxelAutoencoder_linear1, VoxelAutoencoder_linear2
 
 # from vox_encoder.data_utils import extract_2d
 from vox_encoder.file_io import load_data
@@ -87,7 +87,7 @@ def main():
     # Determine if a GPU is available and set the device accordingly
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = VoxelAutoencoder_1Layers(input_dim, latent_dim)
+    model = VoxelAutoencoder_linear1(input_dim, latent_dim)
 
     tensor_datas = construct_data(DATA_RAW_PATH, torch.float32, load_dataset_num)
     print(f"Loaded {len(tensor_datas)} data files")

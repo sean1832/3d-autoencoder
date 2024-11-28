@@ -3,41 +3,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch import nn
 
 from vox_encoder import DATA_DIR, OUTPUT_DIR
-from vox_encoder.autoencoder import VoxelAutoencoder_1Layers, VoxelAutoencoder_2Layers
 from vox_encoder.data_utils import extract_2d, insert_and_replace_2d
+from vox_encoder.evaluate import Evaluate
 from vox_encoder.file_io import load_data
-
-
-def load_model(ckpt_path: str | Path, input_dim: int, latent_dim: int) -> nn.Module:
-    model = VoxelAutoencoder_1Layers(input_dim, latent_dim)
-    checkpoint = torch.load(ckpt_path)
-    model.load_state_dict(checkpoint["model_state_dict"])
-
-    # Set the model to evaluation mode (inference)
-    model.eval()
-    return model
-
-
-def inference(model: nn.Module, input_data: torch.Tensor, threshold: float = 0.5):
-    with torch.no_grad():
-        # Add batch dimension if it doesn't exist
-        if input_data.dim() == 1:
-            input_data = input_data.unsqueeze(0)  # Add batch dimension
-
-        # Forward pass
-        output = model(input_data)
-
-        # Apply threshold
-        thresholded_output = (output > threshold).float()
-
-        # Remove batch dimension for single sample
-        output = output.squeeze(0)
-        thresholded_output = thresholded_output.squeeze(0)
-
-        return output, thresholded_output
 
 
 def prepare_for_json(
@@ -66,8 +36,8 @@ def main():
     output_raw_path = Path(output_dir, "inference_output_raw.json")
     output_thresh_path = Path(output_dir, "inference_output_thresholded.json")
 
-    # Load the model
-    model = load_model(checkpoint_path, input_dim, latent_dim)
+    # Initialize evaluator
+    evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim)
 
     # Load inference data
     original_data = load_data(original_data_path)
@@ -84,7 +54,7 @@ def main():
         raise ValueError(f"Input tensor must have last dimension of {input_dim}")
 
     # Run inference
-    raw_output, thresholded_output = inference(model, input_tensor)
+    raw_output, thresholded_output = evaluator.inference(input_tensor)
 
     # Create output directory if it doesn't exist
     output_dir = Path(OUTPUT_DIR, "inference")

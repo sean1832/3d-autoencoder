@@ -5,8 +5,8 @@ import numpy as np
 import torch
 
 from config import INPUT_DIM, LATENT_DIM
-from vox_encoder import INFERENCE_IN_DIR, INFERENCE_OUT_DIR, MODEL_TORCH_DIR
-from vox_encoder.data_utils import extract_2d, insert_and_replace_2d
+from vox_encoder import INFERENCE_IN_DIR, INFERENCE_OUT_DIR, MODEL_DIR
+from vox_encoder.data_utils import insert_and_replace_2d
 from vox_encoder.evaluate import Evaluate
 from vox_encoder.file_io import load_data
 
@@ -29,43 +29,28 @@ def main():
     data_index = 6  # column of the data that is the state of the voxel
 
     # Paths
-    checkpoint_path = Path(MODEL_TORCH_DIR, "AE_checkpoint.pth")
+    checkpoint_path = Path(MODEL_DIR, "torch", "AE_checkpoint.pth")
+    latent_path = Path(INFERENCE_OUT_DIR, "inference_output_latent_mod.json")
+
     original_data_path = Path(INFERENCE_IN_DIR, "inference_0")
-    output_raw_path = Path(INFERENCE_OUT_DIR, "inference_output_raw.json")
     output_thresh_path = Path(INFERENCE_OUT_DIR, "inference_output_thresholded.json")
-    latent_path = Path(INFERENCE_OUT_DIR, "inference_output_latent.json")
 
     # Initialize evaluator
-    evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim, device="cuda")
+    evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim)
 
-    # Load inference data
+    # Load latent
     original_data = load_data(original_data_path)
-    clean_data = extract_2d(original_data, data_index, float)
+    latent_data = load_data(latent_path)
 
-    # Print debug information
-    print(f"Input data type: {type(clean_data)}")
-    print(f"Input data shape: {np.array(clean_data).shape}")
-
-    input_tensor = torch.tensor(clean_data, dtype=torch.float32)
-
-    # Ensure input tensor has correct shape
-    if input_tensor.shape[-1] != input_dim:
-        raise ValueError(f"Input tensor must have last dimension of {input_dim}")
+    latent_tensor = torch.tensor(latent_data, dtype=torch.float32)
 
     # Run inference
-    raw_output, thresholded_output, latent = evaluator.inference(input_tensor)
+    thresholded_output = evaluator.decode(latent_tensor)
 
     # Save outputs
     try:
-        with open(output_raw_path, "w") as f:
-            json.dump(prepare_for_json(raw_output, original_data, data_index), f)
-
         with open(output_thresh_path, "w") as f:
             json.dump(prepare_for_json(thresholded_output, original_data, data_index), f)
-
-        with open(latent_path, "w") as f:
-            latent_flat = latent.cpu().numpy().tolist()
-            json.dump(latent_flat, f)
 
         print(f"Saved outputs to {INFERENCE_OUT_DIR}")
 

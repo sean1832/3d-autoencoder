@@ -3,19 +3,19 @@ from pathlib import Path
 
 import torch
 
-from config import INPUT_DIM, LATENT_DIM
-from vox_encoder import MODEL_ONNX_DIR, MODEL_TORCH_DIR
-from vox_encoder.autoencoder import VoxelAutoencoder_linear1
+from config import LATENT_DIM, ONNX_OPSET
+from vox_encoder import MODEL_DIR, MODEL_TORCH_DIR
+from vox_encoder.autoencoder import VoxelAutoencoder_CNN2
 
 # Define latent and input dimensions
-input_dim = INPUT_DIM
+input_dim = (1, 22, 20, 20)  # 3D input dimensions
 latent_dim = LATENT_DIM
 
-torch_ckpt_path = Path(f"{MODEL_TORCH_DIR}/AE_checkpoint.pth")
+torch_ckpt_path = Path(f"{MODEL_TORCH_DIR}/AE_checkpoint_conv.pth")
 
 
 # Instantiate the model
-model = VoxelAutoencoder_linear1(input_dim, latent_dim)
+model = VoxelAutoencoder_CNN2(latent_dim)
 model.eval()  # Set model to evaluation mode
 
 # Load pre-trained weights if available
@@ -31,13 +31,13 @@ encoder = model.encoder
 decoder = model.decoder
 
 # Define dummy input tensors for ONNX export
-dummy_encoder_input = torch.randn(1, input_dim)  # Input for the encoder
-dummy_decoder_input = torch.randn(1, latent_dim)  # Input for the decoder
+dummy_encoder_input = torch.randn(1, *input_dim)  # Input for the encoder
+dummy_decoder_input = torch.randn(1, 128, 3, 3, 3)  # Reshaped latent vector
 
 # Define file paths for saving ONNX models
-model_dir = Path(f"{MODEL_ONNX_DIR}/{datetime.now().strftime('%y%m%d%H%M%S')}")
-encoder_path = Path(model_dir, "encoder.onnx")
-decoder_path = Path(model_dir, "decoder.onnx")
+model_dir = Path(f"{MODEL_DIR}/{datetime.now().strftime('%y%m%d%H%M%S')}")
+encoder_path = Path(model_dir, f"encoder_conv_opset{ONNX_OPSET}.onnx")
+decoder_path = Path(model_dir, f"decoder_conv_opset{ONNX_OPSET}.onnx")
 
 
 # Create directories if they don't exist
@@ -50,7 +50,7 @@ torch.onnx.export(
     (dummy_encoder_input,),
     encoder_path,
     export_params=True,
-    opset_version=11,
+    opset_version=ONNX_OPSET,
     do_constant_folding=True,
     input_names=["input"],
     output_names=["output"],
@@ -61,11 +61,25 @@ torch.onnx.export(
 )
 print(f"Encoder exported to {encoder_path}")
 
-# Export the decoder to ONNX
+# Export decoder
 torch.onnx.export(
     decoder,
     (dummy_decoder_input,),
-    decoder_path,
+    str(decoder_path),
+    export_params=True,
+    opset_version=ONNX_OPSET,
+    do_constant_folding=True,
+    input_names=["input"],
+    output_names=["output"],
+    dynamic_axes={
+        "input": {0: "batch_size"},  # Variable batch size
+        "output": {0: "batch_size"},
+    },
+)  # Export decoder
+torch.onnx.export(
+    decoder,
+    (dummy_decoder_input,),
+    str(decoder_path),
     export_params=True,
     opset_version=11,
     do_constant_folding=True,

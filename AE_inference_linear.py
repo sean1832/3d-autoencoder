@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from config import INPUT_DIM, LATENT_DIM
-from vox_encoder import INFERENCE_IN_DIR, INFERENCE_OUT_DIR, MODEL_TORCH_DIR
+from vox_encoder import INFERENCE_IN_DIR, INFERENCE_OUT_DIR, MODEL_LATEST_DIR
 from vox_encoder.data_utils import extract_2d, insert_and_replace_2d
 from vox_encoder.evaluate import Evaluate
 from vox_encoder.file_io import load_data
@@ -29,14 +29,14 @@ def main():
     data_index = 6  # column of the data that is the state of the voxel
 
     # Paths
-    checkpoint_path = Path(MODEL_TORCH_DIR, "AE_checkpoint.pth")
+    checkpoint_path = Path(MODEL_LATEST_DIR, "AE_checkpoint.pth")
     original_data_path = Path(INFERENCE_IN_DIR, "inference_0")
     output_raw_path = Path(INFERENCE_OUT_DIR, "inference_output_raw.json")
     output_thresh_path = Path(INFERENCE_OUT_DIR, "inference_output_thresholded.json")
     latent_path = Path(INFERENCE_OUT_DIR, "inference_output_latent.json")
 
     # Initialize evaluator
-    evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim, device="cuda")
+    evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim)
 
     # Load inference data
     original_data = load_data(original_data_path)

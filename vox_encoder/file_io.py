@@ -12,3 +12,8 @@ def load_data(path: str | Path):
     with open(path, "r") as f:
         data = json.load(f)
     return data
+
+
+def write_json(data: dict | list, path: str | Path):
+    with open(path, "w") as f:
+        json.dump(data, f)

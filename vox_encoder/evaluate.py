@@ -1,25 +1,33 @@
 from pathlib import Path
-from typing import Literal, Tuple, Union
+from typing import Tuple, Union
 
 import torch
 from torch import nn
 
-from vox_encoder.autoencoder import VoxelAutoencoder_linear1
+from vox_encoder.autoencoder import (
+    VoxelAutoencoder_CNN2,
+    VoxelAutoencoder_linear1,
+)
 
 
 class Evaluate:
-    def __init__(self, model: nn.Module, device: Literal["cpu", "cuda"] = "cpu") -> None:
+    def __init__(self, model: nn.Module) -> None:
         self.model: nn.Module = model
-        self.device: Literal["cpu", "cuda"] = device
         # Set the model to evaluation mode (inference)
         self.model.eval()
-        self.model.to(device)
 
     @classmethod
     def load_linear(
-        cls, ckpt_path: Union[Path, str], input_dim: int, latent_dim: int, device: Literal["cpu", "cuda"] = "cpu"
+        cls, ckpt_path: Union[Path, str], input_dim: int, latent_dim: int
     ) -> "Evaluate":
         model = VoxelAutoencoder_linear1(input_dim, latent_dim)
+        checkpoint: dict = torch.load(ckpt_path, weights_only=True)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        return cls(model)
+
+    @classmethod
+    def load_conv(cls, ckpt_path: Union[Path, str], latent_dim: int) -> "Evaluate":
+        model = VoxelAutoencoder_CNN2(latent_dim)
         checkpoint: dict = torch.load(ckpt_path, weights_only=True)
         model.load_state_dict(checkpoint["model_state_dict"])
         return cls(model)
@@ -37,17 +45,14 @@ class Evaluate:
             if input_data.dim() == 1:
                 input_data = input_data.unsqueeze(0)  # Add batch dimension
 
-            # Move input data to device
-            tensor_on_device = input_data.to(self.device)
-
             # Forward pass
-            output: torch.Tensor = self.model(tensor_on_device)
+            output: torch.Tensor = self.model(input_data)
 
             # Apply threshold
             thresholded_output: torch.Tensor = self.threashold(output, threshold)
 
             # latent representation
-            latent: torch.Tensor = self.model.encode(input_data)
+            latent: torch.Tensor = self.model.encoder(input_data)
 
             # Remove batch dimension for single sample
             output = output.squeeze(0)

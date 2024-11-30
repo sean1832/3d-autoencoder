@@ -8,8 +8,8 @@ from torch import dtype, nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from config import BATCH_SIZE, EPOCH_NUM, INPUT_DIM, LATENT_DIM, LOAD_DATASET_NUM
-from vox_encoder import DATA_TRAIN, MODEL_TORCH_DIR
+from config import INPUT_DIM, LATENT_DIM
+from vox_encoder import DATA_TRAIN, MODEL_DIR
 from vox_encoder.autoencoder import VoxelAutoencoder_linear1
 
 # from vox_encoder.data_utils import extract_2d
@@ -85,8 +85,9 @@ def train_model(model: nn.Module, train_loader, num_epochs=50, device: str | tor
 
 
 def main():
-    num_epoch = EPOCH_NUM
-    load_dataset_num = LOAD_DATASET_NUM
+    num_epoch = 100
+    load_dataset_num = -1
+    batch_size = 1024
 
     # Determine if a GPU is available and set the device accordingly
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -96,7 +97,7 @@ def main():
     tensor_datas = load_tensor(DATA_TRAIN, torch.float32, load_dataset_num)
     print(f"Loaded {len(tensor_datas)} data files")
     tensor_dataset = TensorDataset(torch.stack(tensor_datas))
-    train_loader = DataLoader(tensor_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=True)
 
     try:
         model, optimizer, loss, epoch = train_model(
@@ -112,9 +113,9 @@ def main():
                 "epoch": epoch,
                 "loss": loss.item(),
             },
-            Path(MODEL_TORCH_DIR, "AE_checkpoint.pth"),
+            Path(MODEL_DIR, "AE_checkpoint_linear.pth"),
         )
-        print(f"Model saved to {Path(MODEL_TORCH_DIR, 'AE_checkpoint.pth')}")
+        print(f"Model saved to {Path(MODEL_DIR, 'AE_checkpoint_linear.pth')}")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from typing import Tuple, Union
 import torch
 from torch import nn
 
-from vox_encoder.autoencoder import (
+from vox_encoder.ae_linear import (
     VoxelAutoencoder_linear1,
 )
 

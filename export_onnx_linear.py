@@ -4,7 +4,7 @@ import torch
 
 from config import LATENT_DIM
 from vox_encoder import MODEL_LATEST_DIR
-from vox_encoder.autoencoder import VoxelAutoencoder_linear1
+from vox_encoder.ae_linear import VoxelAutoencoder_linear1
 
 # Define latent and input dimensions
 input_dim = 24 * 24 * 24

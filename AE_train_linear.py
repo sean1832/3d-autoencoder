@@ -19,10 +19,10 @@ from vox_encoder import (
     MODEL_DIR,
     MODEL_LATEST_DIR,
 )
-from vox_encoder.autoencoder import VoxelAutoencoder_linear1
+from vox_encoder.ae_linear import VoxelAutoencoder_linear1
 
 # from vox_encoder.data_utils import extract_2d
-from vox_encoder.file_io import load_json, load_npy
+from vox_encoder.file_io import load_npy
 from vox_encoder.loss import weighted_binary_cross_entropy
 
 

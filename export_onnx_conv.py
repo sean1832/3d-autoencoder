@@ -1,21 +1,20 @@
-from datetime import datetime
 from pathlib import Path
 
 import torch
 
 from config import LATENT_DIM, ONNX_OPSET
-from vox_encoder import MODEL_DIR, MODEL_TORCH_DIR
-from vox_encoder.autoencoder import VoxelAutoencoder_CNN2
+from vox_encoder import MODEL_LATEST_DIR
+from vox_encoder.ae_cnn import DecoderWrapperCNN, EncoderWrapperCNN, VoxelAutoencoder_CNN
 
 # Define latent and input dimensions
-input_dim = (1, 22, 20, 20)  # 3D input dimensions
+input_dim = 24
 latent_dim = LATENT_DIM
 
-torch_ckpt_path = Path(f"{MODEL_TORCH_DIR}/AE_checkpoint_conv.pth")
+torch_ckpt_path = Path(f"{MODEL_LATEST_DIR}/AE_checkpoint_conv.pth")
 
 
 # Instantiate the model
-model = VoxelAutoencoder_CNN2(latent_dim)
+model = VoxelAutoencoder_CNN(latent_dim, input_dim)
 model.eval()  # Set model to evaluation mode
 
 # Load pre-trained weights if available
@@ -27,15 +26,15 @@ else:
     print(f"No weights found at {torch_ckpt_path}. Proceeding with random initialization.")
 
 # Extract the encoder and decoder components
-encoder = model.encoder
-decoder = model.decoder
+encoder = EncoderWrapperCNN(model.encoder_linear, model.encoder_conv)
+decoder = DecoderWrapperCNN(model.decoder_linear, model.decoder_conv, model.conv_dim, 64)
 
 # Define dummy input tensors for ONNX export
-dummy_encoder_input = torch.randn(1, *input_dim)  # Input for the encoder
-dummy_decoder_input = torch.randn(1, 128, 3, 3, 3)  # Reshaped latent vector
+dummy_encoder_input = torch.randn(1, 1, input_dim, input_dim, input_dim)  # Input for the encoder
+dummy_decoder_input = torch.randn(1, latent_dim)  # Reshaped latent vector
 
 # Define file paths for saving ONNX models
-model_dir = Path(f"{MODEL_DIR}/{datetime.now().strftime('%y%m%d%H%M%S')}")
+model_dir = Path(f"{MODEL_LATEST_DIR}/exported_onnx")
 encoder_path = Path(model_dir, f"encoder_conv_opset{ONNX_OPSET}.onnx")
 decoder_path = Path(model_dir, f"decoder_conv_opset{ONNX_OPSET}.onnx")
 

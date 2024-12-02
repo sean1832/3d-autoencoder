@@ -5,26 +5,31 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import torch
 from torch import dtype, nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from config import LATENT_DIM, ONNX_OPSET
-from vox_encoder import DATA_TRAIN, MODEL_DIR, MODEL_LATEST_DIR
-from vox_encoder.autoencoder import DecoderWrapperCNN, VoxelAutoencoder_CNN2
+from vox_encoder import (
+    DATA_TRAIN_PROCESSED_20,
+    DATA_TRAIN_PROCESSED_22,
+    DATA_TRAIN_PROCESSED_24,
+    DATA_TRAIN_PROCESSED_50,
+    MODEL_DIR,
+    MODEL_LATEST_DIR,
+)
+from vox_encoder.ae_cnn import DecoderWrapperCNN, EncoderWrapperCNN, VoxelAutoencoder_CNN
 
 # from vox_encoder.data_utils import extract_2d
-from vox_encoder.file_io import load_data
+from vox_encoder.file_io import load_npy
 from vox_encoder.loss import weighted_binary_cross_entropy
 
 
 def process_file(file_path: str, type: dtype) -> torch.Tensor:
     """Helper function to process a single file."""
-    raw_data = load_data(file_path)
-    grid = np.array(raw_data).reshape(22, 20, 20)
-    return torch.tensor(grid, dtype=type).unsqueeze(0)
+    raw_data = load_npy(file_path)
+    return torch.tensor(raw_data, dtype=type).unsqueeze(0)
 
 
 def load_tensor(path: str | Path, type: torch.dtype, count: int = -1) -> list[torch.Tensor]:
@@ -49,13 +54,25 @@ def load_tensor(path: str | Path, type: torch.dtype, count: int = -1) -> list[to
     return tensor_data
 
 
-def train_model(model: nn.Module, train_loader, num_epochs, device: str | torch.device = "cpu"):
-    # criterion = nn.BCELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-5)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
+def train_model(
+    model: nn.Module,
+    train_loader,
+    val_loader,
+    num_epochs,
+    device: str | torch.device = "cpu",
+):
+    weight = [0.2, 0.8]
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.99)
+    print(f"Training on {device}...")
 
     model.to(device)  # Move model to the specified device
-    print_token = True
+
+    # Variables for early stopping
+    best_val_loss = float("inf")
+    epochs_no_improve = 0
+    n_epochs_stop = 20  # <- Adjust this value
+
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
@@ -65,31 +82,53 @@ def train_model(model: nn.Module, train_loader, num_epochs, device: str | torch.
             optimizer.zero_grad()
             input = inputs[0].to(device)  # Move inputs to device
             outputs = model(input)
-            if print_token:
-                print(f"Output shape: {outputs.shape}, Target shape: {input.shape}")
-                print_token = False
             loss = weighted_binary_cross_entropy(
-                outputs, input, weights=[0.25, 0.75]
+                outputs, input, weights=weight
             )  # sparse voxel [0.28, 0.72]
             loss.backward()
             optimizer.step()
-
             running_loss += loss.item()
+            scheduler.step()
 
-        scheduler.step()
         avg_loss = running_loss / len(train_loader)
         time_end = time.time()
+
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs in val_loader:
+                input = inputs[0].to(device)  # Move inputs to device
+                outputs = model(input)
+                loss = weighted_binary_cross_entropy(outputs, input, weights=weight)
+                val_loss += loss.item()
+        avg_val_loss = val_loss / len(val_loader)
+        scheduler.step()
+
         print(
-            f"Epoch [{epoch+1}/{num_epochs}], Avg.Loss: {avg_loss:.6f}, Loss: {loss:.6f}, Elapsed: {time_end - time_start:.2f}s"
+            f"Epoch [{epoch+1}/{num_epochs}], Avg.Train Loss: {avg_loss:.6f}, Avg.Val Loss: {avg_val_loss:.6f}, Elapsed: {time_end - time_start:.2f}s"
         )
 
-        # Optionally add validation and early stopping
+        # Early stopping
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            epochs_no_improve = 0
+            # Optionally save the best model here
+            best_model_wts = model.state_dict()
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= n_epochs_stop:
+            print("Early stopping!")
+            break
 
     print("Training complete.")
+    # Load best model weights before returning
+    model.load_state_dict(best_model_wts)
     return (model, optimizer, loss, epoch)
 
 
-def save_model(model: nn.Module, optimizer, epoch, loss, latent_dim):
+def save_model(model: nn.Module, optimizer, epoch, loss, latent_dim, input_size):
     model_dir = Path(MODEL_DIR, f"{datetime.now().strftime('%y%m%d%H%M%S')}")
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -111,15 +150,17 @@ def save_model(model: nn.Module, optimizer, epoch, loss, latent_dim):
     model.to("cpu")
 
     # Extract the encoder and decoder components
-    encoder = model.encoder
-    decoder = DecoderWrapperCNN(model.decoder_fc, model.decoder_conv)
+    encoder = EncoderWrapperCNN(model.encoder_linear, model.encoder_conv)
+    decoder = DecoderWrapperCNN(model.decoder_linear, model.decoder_conv, model.conv_dim, 64)
 
     # Save ONNX model
     encoder_path = Path(model_dir, f"encoder_conv_opset{ONNX_OPSET}.onnx")
     decoder_path = Path(model_dir, f"decoder_conv_opset{ONNX_OPSET}.onnx")
 
     # Define dummy input tensors for ONNX export
-    dummy_encoder_input = torch.randn(1, 1, 22, 20, 20)  # Input for the encoder
+    dummy_encoder_input = torch.randn(
+        1, 1, input_size, input_size, input_size
+    )  # Input for the encoder
     dummy_decoder_input = torch.randn(1, latent_dim)  # Reshaped latent vector
 
     # Export the encoder to ONNX
@@ -168,24 +209,34 @@ def save_model(model: nn.Module, optimizer, epoch, loss, latent_dim):
 def main():
     load_dataset_num = -1
     latent_dim = LATENT_DIM
-    batch_size = 2048
-    num_epoch = 500
+    input_dim = 24
+    batch_size = 1024
+    num_epoch = 800
 
     # Determine if a GPU is available and set the device accordingly
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = VoxelAutoencoder_CNN2(latent_dim)
+    model = VoxelAutoencoder_CNN(latent_dim, input_dim)
 
-    tensor_datas = load_tensor(DATA_TRAIN, torch.float32, load_dataset_num)
+    tensor_datas = load_tensor(DATA_TRAIN_PROCESSED_24, torch.float32, load_dataset_num)
     print(f"Loaded {len(tensor_datas)} data files")
     tensor_dataset = TensorDataset(torch.stack(tensor_datas))
-    train_loader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=True)
+
+    # Split dataset into training and validation sets
+    train_size = int(0.8 * len(tensor_dataset))
+    val_size = len(tensor_dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        tensor_dataset, [train_size, val_size]
+    )
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
 
     try:
         model, optimizer, loss, epoch = train_model(
-            model, train_loader, num_epochs=num_epoch, device=device
+            model, train_loader, val_loader, num_epochs=num_epoch, device=device
         )
-        save_model(model, optimizer, epoch, loss, latent_dim)
+        save_model(model, optimizer, epoch, loss, latent_dim, input_dim)
     except KeyboardInterrupt:
         print("Training interrupted by user.")
 

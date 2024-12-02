@@ -4,11 +4,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from config import INPUT_DIM, LATENT_DIM
+from config import LATENT_DIM
 from vox_encoder import INFERENCE_IN_DIR, INFERENCE_OUT_DIR, MODEL_DIR
 from vox_encoder.data_utils import insert_and_replace_2d
 from vox_encoder.evaluate import Evaluate
-from vox_encoder.file_io import load_data
+from vox_encoder.file_io import load_json
 
 
 def prepare_for_json(
@@ -22,7 +22,7 @@ def prepare_for_json(
 
 def main():
     # Parameters
-    input_dim = INPUT_DIM
+    input_dim = 24 * 24 * 24
     latent_dim = LATENT_DIM
 
     # Data
@@ -39,8 +39,8 @@ def main():
     evaluator = Evaluate.load_linear(checkpoint_path, input_dim, latent_dim)
 
     # Load latent
-    original_data = load_data(original_data_path)
-    latent_data = load_data(latent_path)
+    original_data = load_json(original_data_path)
+    latent_data = load_json(latent_path)
 
     latent_tensor = torch.tensor(latent_data, dtype=torch.float32)
 

@@ -5,7 +5,6 @@ import torch
 from torch import nn
 
 from vox_encoder.autoencoder import (
-    VoxelAutoencoder_CNN2,
     VoxelAutoencoder_linear1,
 )
 
@@ -26,8 +25,7 @@ class Evaluate:
         return cls(model)
 
     @classmethod
-    def load_conv(cls, ckpt_path: Union[Path, str], latent_dim: int) -> "Evaluate":
-        model = VoxelAutoencoder_CNN2(latent_dim)
+    def load_conv(cls, ckpt_path: Union[Path, str], model: nn.Module) -> "Evaluate":
         checkpoint: dict = torch.load(ckpt_path, weights_only=True)
         model.load_state_dict(checkpoint["model_state_dict"])
         return cls(model)
@@ -35,11 +33,11 @@ class Evaluate:
     def threashold(self, output: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
         return (output > threshold).float()
 
-    def inference(
+    def inference_linear(
         self,
         input_data: torch.Tensor,
         threshold: float = 0.5,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
         with torch.no_grad():
             # Add batch dimension if it doesn't exist
             if input_data.dim() == 1:
@@ -59,7 +57,39 @@ class Evaluate:
             thresholded_output = thresholded_output.squeeze(0)
             latent = latent.squeeze(0)
 
-            return output, thresholded_output, latent
+            # calculate accuracy
+            accuracy = self.calc_accuracy(input_data, thresholded_output)
+
+            return output, thresholded_output, latent, accuracy
+
+    def inference_cnn(
+        self,
+        input_data: torch.Tensor,
+        threshold: float = 0.5,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+        with torch.no_grad():
+            # Add batch dimension if it doesn't exist
+            if input_data.dim() == 1:
+                input_data = input_data.unsqueeze(0)  # Add batch dimension
+
+            # Forward pass
+            output: torch.Tensor = self.model(input_data)
+
+            # Apply threshold
+            thresholded_output: torch.Tensor = self.threashold(output, threshold)
+
+            # latent representation
+            conv_latent = self.model.encoder_conv(input_data)
+            latent: torch.Tensor = self.model.encoder_linear(conv_latent)
+
+            # Remove batch dimension for single sample
+            output = output.squeeze(0)
+            thresholded_output = thresholded_output.squeeze(0)
+            latent = latent.squeeze(0)
+
+            # calculate accuracy
+            accuracy = self.calc_accuracy(input_data, thresholded_output)
+            return output, thresholded_output, latent, accuracy
 
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
@@ -77,3 +107,6 @@ class Evaluate:
             output = output.squeeze(0)
 
             return output
+
+    def calc_accuracy(self, input: torch.Tensor, output: torch.Tensor) -> float:
+        return (input == output).float().mean().item()

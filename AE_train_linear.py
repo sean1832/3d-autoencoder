@@ -7,21 +7,30 @@ import torch
 from torch import dtype, nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+from win32con import PRINTER_FONTTYPE
 
-from config import INPUT_DIM, LATENT_DIM
-from vox_encoder import DATA_TRAIN, MODEL_DIR
+from config import LATENT_DIM
+from vox_encoder import (
+    DATA_TRAIN_PROCESSED_20,
+    DATA_TRAIN_PROCESSED_22,
+    DATA_TRAIN_PROCESSED_24,
+    DATA_TRAIN_PROCESSED_50,
+    DATA_TRAIN_RAW_24,
+    MODEL_DIR,
+    MODEL_LATEST_DIR,
+)
 from vox_encoder.autoencoder import VoxelAutoencoder_linear1
 
 # from vox_encoder.data_utils import extract_2d
-from vox_encoder.file_io import load_data
+from vox_encoder.file_io import load_json, load_npy
 from vox_encoder.loss import weighted_binary_cross_entropy
 
 
 def process_file(file_path: str, type: dtype) -> torch.Tensor:
     """Helper function to process a single file."""
-    raw_data = load_data(file_path)
+    raw_data = load_npy(file_path)
     # flat_data = extract_2d(raw_data, 3, float)
-    flat_data = raw_data
+    flat_data = raw_data.flatten()
     return torch.tensor(flat_data, dtype=type)
 
 
@@ -49,7 +58,7 @@ def load_tensor(path: str | Path, type: torch.dtype, count: int = -1) -> list[to
 
 def train_model(model: nn.Module, train_loader, num_epochs=50, device: str | torch.device = "cpu"):
     # criterion = nn.BCELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
 
     model.to(device)  # Move model to the specified device
@@ -85,16 +94,17 @@ def train_model(model: nn.Module, train_loader, num_epochs=50, device: str | tor
 
 
 def main():
-    num_epoch = 100
+    num_epoch = 300
     load_dataset_num = -1
     batch_size = 1024
+    input_dim = 24 * 24 * 24
 
     # Determine if a GPU is available and set the device accordingly
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = VoxelAutoencoder_linear1(INPUT_DIM, LATENT_DIM)
+    model = VoxelAutoencoder_linear1(input_dim, LATENT_DIM)
 
-    tensor_datas = load_tensor(DATA_TRAIN, torch.float32, load_dataset_num)
+    tensor_datas = load_tensor(DATA_TRAIN_PROCESSED_24, torch.float32, load_dataset_num)
     print(f"Loaded {len(tensor_datas)} data files")
     tensor_dataset = TensorDataset(torch.stack(tensor_datas))
     train_loader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=True)
@@ -103,9 +113,6 @@ def main():
         model, optimizer, loss, epoch = train_model(
             model, train_loader, num_epochs=num_epoch, device=device
         )
-    except KeyboardInterrupt:
-        print("Training interrupted by user.")
-    finally:
         torch.save(
             {
                 "model_state_dict": model.state_dict(),
@@ -113,9 +120,11 @@ def main():
                 "epoch": epoch,
                 "loss": loss.item(),
             },
-            Path(MODEL_DIR, "AE_checkpoint_linear.pth"),
+            Path(MODEL_LATEST_DIR, "AE_checkpoint_linear.pth"),
         )
-        print(f"Model saved to {Path(MODEL_DIR, 'AE_checkpoint_linear.pth')}")
+        print(f"Model saved to {Path(MODEL_LATEST_DIR, 'AE_checkpoint_linear.pth')}")
+    except KeyboardInterrupt:
+        print("Training interrupted by user.")
 
 
 if __name__ == "__main__":

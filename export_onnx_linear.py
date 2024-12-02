@@ -1,17 +1,16 @@
-from datetime import datetime
 from pathlib import Path
 
 import torch
 
-from config import INPUT_DIM, LATENT_DIM
-from vox_encoder import MODEL_DIR, MODEL_TORCH_DIR
+from config import LATENT_DIM
+from vox_encoder import MODEL_LATEST_DIR
 from vox_encoder.autoencoder import VoxelAutoencoder_linear1
 
 # Define latent and input dimensions
-input_dim = INPUT_DIM
+input_dim = 24 * 24 * 24
 latent_dim = LATENT_DIM
 
-torch_ckpt_path = Path(f"{MODEL_TORCH_DIR}/AE_checkpoint.pth")
+torch_ckpt_path = Path(f"{MODEL_LATEST_DIR}/AE_checkpoint_linear.pth")
 
 
 # Instantiate the model
@@ -35,9 +34,9 @@ dummy_encoder_input = torch.randn(1, input_dim)  # Input for the encoder
 dummy_decoder_input = torch.randn(1, latent_dim)  # Input for the decoder
 
 # Define file paths for saving ONNX models
-model_dir = Path(f"{MODEL_DIR}/{datetime.now().strftime('%y%m%d%H%M%S')}")
-encoder_path = Path(model_dir, "encoder.onnx")
-decoder_path = Path(model_dir, "decoder.onnx")
+model_dir = Path(f"{MODEL_LATEST_DIR}/exported_onnx")
+encoder_path = Path(model_dir, "encoder_linear.onnx")
+decoder_path = Path(model_dir, "decoder_linear.onnx")
 
 
 # Create directories if they don't exist

@@ -67,7 +67,7 @@ def main():
 
         with open(latent_path, "w") as f:
             latent_flat = latent.cpu().numpy().tolist()
-            json.dump(latent_flat, f)
+            json.dump(latent_flat, f, indent=2)
 
         with open(Path(INFERENCE_OUT_DIR, "inference_accuracy.json"), "w") as f:
             json.dump({"accuracy": accuracy}, f)

@@ -61,7 +61,7 @@ def train_model(
     num_epochs,
     device: str | torch.device = "cpu",
 ):
-    weight = [0.2, 0.8]
+    weight = [0.1, 0.9]
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.99)
     print(f"Training on {device}...")

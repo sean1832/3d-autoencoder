@@ -39,3 +39,6 @@ python AE_inference.py
 The output will be generated in the `output/inference` directory.
 Load the output in grasshopper using the `evaluate.gh` script and visualize the results.
 
+## Result
+I found that the `VAE` does not work well with this data. 
+The `AE_conv` model works the best.

@@ -7,7 +7,6 @@ import torch
 from torch import dtype, nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
-from win32con import PRINTER_FONTTYPE
 
 from config import LATENT_DIM
 from vox_encoder import (
